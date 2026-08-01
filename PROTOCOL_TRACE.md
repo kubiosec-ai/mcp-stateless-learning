@@ -14,6 +14,23 @@ Generated from `mcp_stateless.pcap` by `06_pcap_to_markdown.py`. This is the tra
 
 **5. State is a plain argument.** In the `03` section, `session_id` travels inside `arguments` like any other parameter. That is the whole explicit-handle pattern, visible in the bytes. Watch one session count 1, 2, 3 while a second session independently starts at 1.
 
+## Two questions this trace always raises
+
+**Why are there three near-identical `add` calls in section `01`?** Compare any two of them: they differ only in `id` and `progressToken`. Everything else, including `Content-Length`, is identical, and both return `5.0`. Those two fields are correlation handles, not state: `id` is how JSON-RPC matches a response to its request, and `progressToken` is the label a server would attach progress notifications to. Repeating the call is the point. Same input, same output, nothing accumulating on the server. Compare with section `02`, where three identical `increment` calls return 1, 2 and 3.
+
+**Why does `tools/list` come *after* the first `tools/call`?** The order is discover, call, list, call, call, which looks backwards. Note first that `04_client_demo.py` never asks for a tool list at all: it only calls `add` three times. That request is emitted by the fastmcp client itself, from inside the code that parses a call result:
+
+```python
+# fastmcp/client/mixins/tools.py
+# Ensure the schema cache is populated for type validation.
+if name not in tool_output_schemas:
+    await list_tools_fn()
+```
+
+So the sequence is: send the first call, get the response back, and *while deserializing it* discover that the tool's output schema is not cached yet. The client fetches the schema then, uses it to coerce `structuredContent` into a typed value, and keeps it for the rest of the connection. Calls two and three skip the fetch.
+
+Two things worth taking from that. It is a **client library detail, not a protocol rule**: another SDK is free to list tools up front. And the cache lives in the **client**, so the server still stores nothing between requests. Client-side caching and a stateless server are not in conflict.
+
 
 > Captured on loopback with a full snaplen (`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the larger `tools/list` responses.
 
