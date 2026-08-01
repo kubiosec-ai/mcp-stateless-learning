@@ -145,6 +145,34 @@ Worth demoing on **8003**: call `create_session`, paste the returned id into
 `increment`, and watch it climb 1, 2, 3. Mint a second session and it starts
 back at 1.
 
+## Seeing the protocol on the wire
+
+`PROTOCOL_TRACE.md` is a readable, packet-level walkthrough of what
+`04_client_demo.py` actually sends: every HTTP request and response with the
+JSON-RPC bodies pretty-printed. It is the fastest way to understand what the
+2026-07-28 protocol looks like, because you can see that there is no
+handshake, no session header, and that `session_id` is just a normal tool
+argument.
+
+It is generated from the included capture:
+
+```bash
+python 06_pcap_to_markdown.py mcp_stateless.pcap PROTOCOL_TRACE.md
+```
+
+To capture your own (needs `tcpdump` and `tshark`):
+
+```bash
+sudo tcpdump -i lo0 -s 0 -w mcp_stateless.pcap \
+    'tcp port 8001 or tcp port 8002 or tcp port 8003'
+
+# in another terminal, with the servers running
+python 04_client_demo.py
+```
+
+Use `-s 0`. A truncated snaplen silently cuts off the larger `tools/list`
+responses.
+
 ## SDK compatibility
 
 ```bash
@@ -167,6 +195,8 @@ verified cross-era test.
 - `03_stateful_session_server.py`: per-session state, explicit handles (port 8003)
 - `04_client_demo.py`: client that exercises all three over HTTP
 - `05_compat_check.py`: SDK and protocol-era compatibility checker
+- `06_pcap_to_markdown.py`: turns a packet capture into `PROTOCOL_TRACE.md`
+- `PROTOCOL_TRACE.md`: the protocol walkthrough, generated from `mcp_stateless.pcap`
 - `COMPATIBILITY.md`: SDK versions, backward compatibility, deprecation timeline
 
 ## Why this matters (August 2026)
