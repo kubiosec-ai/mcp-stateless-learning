@@ -62,7 +62,25 @@ mcp-name: increment
 Mcp-Param-session: 05fb378c-3e69-4e28-8b7e-c8e68d50d4a4
 ```
 
-The server validates that the header agrees with the body, so the two cannot drift apart. Reach for this when something in front of your servers genuinely needs the value (shard routing, per-tenant rate limiting, audit logging) rather than to recreate affinity. If you find yourself needing affinity, the real fix is usually to move the session state into a shared `session_state_store`.
+The server validates that the header agrees with the body, so the two cannot drift apart.
+
+### But something still has to know about the state
+
+Correct, and this is the honest version of the story. Statelessness does not delete the state, it **moves** it. What actually changed is narrower than the marketing suggests:
+
+| | Sticky sessions (old) | Shared store (new) |
+|---|---|---|
+| Where state lives | one replica's memory | a store both replicas read |
+| Routing is | a **correctness** requirement | irrelevant to correctness |
+| Route to the wrong replica | session lost, request broken | works fine |
+| Replica restarts | sessions on it are gone | unaffected |
+| Cost | LB config coupled to app state | you now operate a store |
+
+So the load balancer does not need to be state-aware, but your *architecture* still does. You traded routing complexity for storage complexity: an extra network hop on stateful calls, a new dependency and failure domain, and a retention policy to choose. FastMCP writes never set a TTL themselves, so expiry is entirely the store's (`redis`, `valkey`, `postgresql`, `dynamodb`, `mongodb`, `memcached` and others are available through the `AsyncKeyValue` interface).
+
+**One caveat worth knowing before you fan out.** FastMCP's own docstring for `Session` says: *"Concurrent writes to one session race on the read-modify-write; session state is small and typically driven serially by one agent, so this is acceptable."* That is an assumption, not a guarantee. Two requests for the same session landing on two replicas at the same moment can lose an update, because `get` then `set` is not atomic. Fine for one agent working through a conversation, not fine for concurrent fan-out over a shared session. If you need that, use a store with atomic operations or keep writes serialised per session.
+
+This is also where session-aware routing earns its place. Hashing on `Mcp-Param-session` gives you cache locality and narrows that race window, but as an **optimisation**: if the routing misses, the request is still correct, just a store round-trip slower. That is the real difference from sticky sessions, where a routing miss was a bug.
 
 
 > Captured on loopback with a full snaplen (`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the larger `tools/list` responses.
