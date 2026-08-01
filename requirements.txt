@@ -1,0 +1,2 @@
+# Pinned for this training. All four examples run on this version.
+fastmcp==4.0.0b1
