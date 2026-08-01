@@ -1,5 +1,5 @@
 """
-03 — STATEFUL, PER-SESSION, the FastMCP 4 way  (FastMCP 4.0.0b1)
+03: STATEFUL, PER-SESSION, the FastMCP 4 way  (FastMCP 4.0.0b1)
 ===============================================================
 
 This is the important one. It shows how to keep real state PER
@@ -11,7 +11,7 @@ The trick is the "explicit handle" pattern:
   1. The client calls `create_session()` and gets back an
      unguessable session id (a handle).
   2. The client passes that id as `session_id=...` on later calls.
-  3. Each request can land on ANY server replica — the id is all
+  3. Each request can land on ANY server replica, the id is all
      that's needed to find that session's state in the shared store.
 
 So the state is explicit and visible (it's just an argument), the
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     # store, e.g. FastMCP("name", session_state_store=<AsyncKeyValue>),
     # and every replica will see the same session state.
     if "--stdio" in sys.argv:
-        # stdio mode — for the MCP Inspector, Claude Desktop, IDEs.
+        # stdio mode, for the MCP Inspector, Claude Desktop, IDEs.
         mcp.run()
     else:
         mcp.run(transport="http", host="127.0.0.1", port=8003)

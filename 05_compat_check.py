@@ -1,11 +1,11 @@
 """
-05 — COMPATIBILITY CHECKER
+05: COMPATIBILITY CHECKER
 ==========================
 
 Answers one question: *can this SDK talk to these servers?*
 
 MCP is mid-migration. The 2026-07-28 spec made the protocol stateless, and
-the official SDKs shipped a new major version for it — but several popular
+the official SDKs shipped a new major version for it, but several popular
 agent frameworks are still pinned to the previous generation. This script
 reports which client library it found, which MCP SDK version is installed,
 and whether it can actually list and call tools on each server.

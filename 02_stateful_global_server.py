@@ -1,5 +1,5 @@
 """
-02 — STATEFUL MCP SERVER, the simple (global) way  (FastMCP 4.0.0b1)
+02: STATEFUL MCP SERVER, the simple (global) way  (FastMCP 4.0.0b1)
 ====================================================================
 
 A *stateful* server REMEMBERS things between tool calls. The answer
@@ -11,11 +11,11 @@ arguments.
 
 Here the state lives in ordinary module-level Python variables held
 in the server process. This is the SIMPLEST possible illustration
-of "the server remembers" — perfect for a first lesson.
+of "the server remembers", perfect for a first lesson.
 
 But notice the trade-offs (this is the teaching point):
-  * The state is GLOBAL — every client shares the same counter.
-  * The state is PROCESS-LOCAL — restarting the server wipes it,
+  * The state is GLOBAL, every client shares the same counter.
+  * The state is PROCESS-LOCAL, restarting the server wipes it,
     and a second replica would have its own separate copy.
   * Behind a load balancer you'd need session affinity or a shared
     store to make this behave correctly.
@@ -75,10 +75,10 @@ if __name__ == "__main__":
     import sys
 
     if "--stdio" in sys.argv:
-        # stdio mode — for the MCP Inspector, Claude Desktop, IDEs.
+        # stdio mode, for the MCP Inspector, Claude Desktop, IDEs.
         mcp.run()
     else:
         # A normal HTTP server. The state above is shared across ALL
-        # clients because it's a plain module-level variable — a
+        # clients because it's a plain module-level variable, a
         # deliberately obvious form of server-side state for teaching.
         mcp.run(transport="http", host="127.0.0.1", port=8002)

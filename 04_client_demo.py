@@ -1,5 +1,5 @@
 """
-04 — CLIENT DEMO: watch the difference  (FastMCP 4.0.0b1)
+04: CLIENT DEMO: watch the difference  (FastMCP 4.0.0b1)
 ========================================================
 
 This talks to the three servers over HTTP, exactly as a real client
@@ -13,7 +13,7 @@ then, in another terminal:
 
     python 04_client_demo.py
 
-The servers are independent programs — this client is just ONE way to
+The servers are independent programs, this client is just ONE way to
 use them. You can point any MCP client (Claude, an IDE, curl, another
 SDK) at the same URLs.
 """
@@ -61,10 +61,10 @@ async def demo_stateful_session() -> None:
             print("  A.increment() ->", r.data)  # 1, 2, 3
 
         r = await c.call_tool("increment", {"session_id": b})
-        print("  B.increment() ->", r.data)  # 1 — B is independent
+        print("  B.increment() ->", r.data)  # 1, B is independent
 
         r = await c.call_tool("increment", {"session_id": a})
-        print("  A.increment() ->", r.data)  # 4 — A kept counting
+        print("  A.increment() ->", r.data)  # 4, A kept counting
 
 
 async def main() -> None:

@@ -1,10 +1,10 @@
 """
-01 — STATELESS MCP SERVER  (FastMCP 4.0.0b1)
+01: STATELESS MCP SERVER  (FastMCP 4.0.0b1)
 ============================================
 
 A *stateless* server keeps NO memory between tool calls.
 Every call is fully described by its own arguments, and the
-answer depends only on those arguments — never on what happened
+answer depends only on those arguments, never on what happened
 before.
 
     Mental model:   f(input) -> output      (a pure function)
@@ -12,7 +12,7 @@ before.
 Why it matters:
   * Any call can be handled by any worker / replica.
   * You can scale horizontally behind a plain round-robin load
-    balancer — no "sticky sessions", no shared session store.
+    balancer, no "sticky sessions", no shared session store.
   * Restarting the server loses nothing.
 
 This is the direction the MCP spec itself took in the 2026-07-28
@@ -59,21 +59,14 @@ if __name__ == "__main__":
         mcp.run()
     else:
         # stateless_http=True -> the HTTP layer keeps NO per-client
-        #   session; every request is independent. This is the point of
-        #   the lesson, BUT it has a visible consequence: there is no
-        #   session and therefore no server->client SSE stream, so
-        #   `GET /mcp` answers 405. A *legacy-era* client (including the
-        #   MCP Inspector's default "Legacy 2025-11-25" mode) tries to
-        #   open that stream after `initialize` and will sit on
-        #   "Connecting..." forever.
+        #   session; every request is independent.
         #
         # Pass --with-sessions to run the exact same tools WITH HTTP
-        # sessions, so legacy-era clients can connect. Great for
-        # demonstrating the difference live.
+        # sessions enabled, if you want to compare the two side by side.
         stateless = "--with-sessions" not in sys.argv
         print(
             f"[info] HTTP on :8001  stateless_http={stateless}"
-            + ("" if stateless else "  (sessions enabled for legacy clients)")
+            + ("" if stateless else "  (sessions enabled)")
         )
         mcp.run(
             transport="http",
