@@ -10,7 +10,7 @@ Generated from `mcp_stateless.pcap` by `06_pcap_to_markdown.py`. This is the tra
 
 **3. Every request is self-describing.** Each one repeats its `_meta` block with `protocolVersion`, `clientInfo` and `clientCapabilities`. That is the cost of statelessness: a little more on the wire, in exchange for no server-side memory.
 
-**4. Routing headers mirror the body.** `mcp-protocol-version` and `mcp-method` appear as HTTP headers, so a gateway or load balancer can route on them without parsing the JSON-RPC payload.
+**4. Routing headers mirror the body.** `mcp-protocol-version`, `mcp-method` and `mcp-name` (the tool being called) appear as HTTP headers, so a gateway or load balancer can route on them without parsing the JSON-RPC payload. See the load-balancing note below for what is deliberately *not* there.
 
 **5. State is a plain argument.** In the `03` section, `session_id` travels inside `arguments` like any other parameter. That is the whole explicit-handle pattern, visible in the bytes. Watch one session count 1, 2, 3 while a second session independently starts at 1.
 
@@ -30,6 +30,39 @@ if name not in tool_output_schemas:
 So the sequence is: send the first call, get the response back, and *while deserializing it* discover that the tool's output schema is not cached yet. The client fetches the schema then, uses it to coerce `structuredContent` into a typed value, and keeps it for the rest of the connection. Calls two and three skip the fetch.
 
 Two things worth taking from that. It is a **client library detail, not a protocol rule**: another SDK is free to list tools up front. And the cache lives in the **client**, so the server still stores nothing between requests. Client-side caching and a stateless server are not in conflict.
+
+## Load balancing: why the session is *not* in a header
+
+Reading the trace, a lot is exposed in headers for routing, but the session id is not. In section `03` it appears only inside the JSON body, as a normal `session_id` entry in `arguments`. That is deliberate.
+
+Routing on a session is exactly the sticky-session behaviour the 2026-07-28 spec set out to remove. Under the old model the session lived in one process's memory, so the balancer *had* to pin a client to the replica that held it. Under the new model the session id is just a lookup key into a shared store, so any replica can serve any request and there is nothing to route on. Plain round-robin is the point.
+
+**If you do need it in a header, there is a supported opt-in.** Annotate the argument in the tool's input schema with `x-mcp-header` and the client mirrors it into an `Mcp-Param-<token>` header:
+
+```python
+from typing import Annotated
+from pydantic import Field
+
+@mcp.tool
+async def increment(
+    session_id: Annotated[
+        SessionId,
+        Field(json_schema_extra={"x-mcp-header": "session"}),
+    ]
+) -> int:
+    ...
+```
+
+which puts this on the wire, alongside the value in the body:
+
+```http
+POST /mcp HTTP/1.1
+mcp-method: tools/call
+mcp-name: increment
+Mcp-Param-session: 05fb378c-3e69-4e28-8b7e-c8e68d50d4a4
+```
+
+The server validates that the header agrees with the body, so the two cannot drift apart. Reach for this when something in front of your servers genuinely needs the value (shard routing, per-tenant rate limiting, audit logging) rather than to recreate affinity. If you find yourself needing affinity, the real fix is usually to move the session state into a shared `session_state_store`.
 
 
 > Captured on loopback with a full snaplen (`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the larger `tools/list` responses.
@@ -127,6 +160,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: add
 Content-Length: 340
 
 {
@@ -365,6 +399,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: add
 Content-Length: 340
 
 {
@@ -438,6 +473,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: add
 Content-Length: 340
 
 {
@@ -592,6 +628,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 335
 
 {
@@ -834,6 +871,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 335
 
 {
@@ -904,6 +942,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 335
 
 {
@@ -974,6 +1013,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: add_note
 Content-Length: 351
 
 {
@@ -1046,6 +1086,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: add_note
 Content-Length: 353
 
 {
@@ -1118,6 +1159,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: list_notes
 Content-Length: 336
 
 {
@@ -1272,6 +1314,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: create_session
 Content-Length: 340
 
 {
@@ -1569,6 +1612,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: create_session
 Content-Length: 340
 
 {
@@ -1639,6 +1683,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 386
 
 {
@@ -1711,6 +1756,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 386
 
 {
@@ -1783,6 +1829,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 386
 
 {
@@ -1855,6 +1902,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 386
 
 {
@@ -1927,6 +1975,7 @@ accept: application/json, text/event-stream
 content-type: application/json
 mcp-protocol-version: 2026-07-28
 mcp-method: tools/call
+mcp-name: increment
 Content-Length: 386
 
 {

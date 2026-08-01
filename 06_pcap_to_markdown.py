@@ -46,10 +46,14 @@ KEEP_HEADERS = (
     "accept",
     "mcp-protocol-version",
     "mcp-method",
+    "mcp-name",
     "mcp-session-id",
-    "mcp-target",
     "content-length",
 )
+
+# Prefixes to keep as well. `Mcp-Param-*` carries arguments that a tool opted
+# into mirroring as headers, so a gateway can route on them.
+KEEP_HEADER_PREFIXES = ("mcp-param-",)
 
 
 def tshark(pcap: str, display_filter: str, fields: list[str]) -> list[list[str]]:
@@ -101,7 +105,10 @@ def clean_headers(raw: str) -> list[str]:
     lines = []
     for h in raw.split("\x02"):
         h = h.replace("\\r\\n", "").strip()
-        if h and h.split(":")[0].strip().lower() in KEEP_HEADERS:
+        if not h:
+            continue
+        key = h.split(":")[0].strip().lower()
+        if key in KEEP_HEADERS or key.startswith(KEEP_HEADER_PREFIXES):
             lines.append(h)
     return lines
 
@@ -168,9 +175,11 @@ def build(pcap: str, out_path: str) -> None:
         "on the wire, in exchange for no server-side memory.\n"
     )
     doc.append(
-        "**4. Routing headers mirror the body.** `mcp-protocol-version` and "
-        "`mcp-method` appear as HTTP headers, so a gateway or load balancer can "
-        "route on them without parsing the JSON-RPC payload.\n"
+        "**4. Routing headers mirror the body.** `mcp-protocol-version`, "
+        "`mcp-method` and `mcp-name` (the tool being called) appear as HTTP "
+        "headers, so a gateway or load balancer can route on them without "
+        "parsing the JSON-RPC payload. See the load-balancing note below for "
+        "what is deliberately *not* there.\n"
     )
     doc.append(
         "**5. State is a plain argument.** In the `03` section, `session_id` "
@@ -219,6 +228,60 @@ def build(pcap: str, out_path: str) -> None:
         "the cache lives in the **client**, so the server still stores nothing "
         "between requests. Client-side caching and a stateless server are not "
         "in conflict.\n"
+    )
+
+    doc.append("## Load balancing: why the session is *not* in a header\n")
+    doc.append(
+        "Reading the trace, a lot is exposed in headers for routing, but the "
+        "session id is not. In section `03` it appears only inside the JSON "
+        "body, as a normal `session_id` entry in `arguments`. That is "
+        "deliberate.\n"
+    )
+    doc.append(
+        "Routing on a session is exactly the sticky-session behaviour the "
+        "2026-07-28 spec set out to remove. Under the old model the session "
+        "lived in one process's memory, so the balancer *had* to pin a client "
+        "to the replica that held it. Under the new model the session id is "
+        "just a lookup key into a shared store, so any replica can serve any "
+        "request and there is nothing to route on. Plain round-robin is the "
+        "point.\n"
+    )
+    doc.append(
+        "**If you do need it in a header, there is a supported opt-in.** "
+        "Annotate the argument in the tool's input schema with `x-mcp-header` "
+        "and the client mirrors it into an `Mcp-Param-<token>` header:\n"
+    )
+    doc.append(
+        "```python\n"
+        "from typing import Annotated\n"
+        "from pydantic import Field\n"
+        "\n"
+        "@mcp.tool\n"
+        "async def increment(\n"
+        "    session_id: Annotated[\n"
+        "        SessionId,\n"
+        '        Field(json_schema_extra={"x-mcp-header": "session"}),\n'
+        "    ]\n"
+        ") -> int:\n"
+        "    ...\n"
+        "```\n"
+    )
+    doc.append("which puts this on the wire, alongside the value in the body:\n")
+    doc.append(
+        "```http\n"
+        "POST /mcp HTTP/1.1\n"
+        "mcp-method: tools/call\n"
+        "mcp-name: increment\n"
+        "Mcp-Param-session: 05fb378c-3e69-4e28-8b7e-c8e68d50d4a4\n"
+        "```\n"
+    )
+    doc.append(
+        "The server validates that the header agrees with the body, so the two "
+        "cannot drift apart. Reach for this when something in front of your "
+        "servers genuinely needs the value (shard routing, per-tenant rate "
+        "limiting, audit logging) rather than to recreate affinity. If you find "
+        "yourself needing affinity, the real fix is usually to move the session "
+        "state into a shared `session_state_store`.\n"
     )
 
     doc.append(
