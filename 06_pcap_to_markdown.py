@@ -324,6 +324,43 @@ def build(pcap: str, out_path: str) -> None:
         "difference from sticky sessions, where a routing miss was a bug.\n"
     )
 
+    doc.append("### One endpoint, two protocols at once\n")
+    doc.append(
+        "A modern server accepts both eras, so at any moment a single endpoint "
+        "may be serving a mix, and every gateway, load balancer, WAF or tracing "
+        "tool in front of it sees that mix too. Measured by pointing a modern "
+        "client (`mcp 2.0.0`) and a legacy one (`mcp 1.29.0`) at the same "
+        "server and capturing on one port:\n"
+    )
+    doc.append(
+        "```\n"
+        "3 requests   mcp-protocol-version: 2026-07-28   + mcp-method + mcp-name\n"
+        "3 requests   mcp-protocol-version: 2025-11-25   (no routing headers)\n"
+        "```\n"
+    )
+    doc.append(
+        "**The routing headers are modern-only.** `mcp-method` and `mcp-name` "
+        "appeared on the modern client's requests and on none of the legacy "
+        "ones. Any rule that routes on them silently covers only part of your "
+        "traffic; for legacy clients an intermediary still has to parse the "
+        "JSON-RPC body to know which method is being called.\n"
+    )
+    doc.append(
+        "Worse for classification: the legacy client's very first request, the "
+        "`initialize`, carried **no** `mcp-protocol-version` header at all, "
+        "because the version is what that handshake is negotiating. So the one "
+        "request that opens a legacy conversation is also the one an "
+        "intermediary cannot classify from headers alone.\n"
+    )
+    doc.append(
+        "Practical guidance for anything sitting in front of MCP servers: treat "
+        "header-based routing as an optimisation with a body-parsing or "
+        "default-route fallback, never as complete coverage. And expect the mix "
+        "to shift under you. The era a client speaks follows its `mcp` library "
+        "version, so a dependency bump on the client side changes what your "
+        "infrastructure sees, with no server change at all.\n"
+    )
+
     doc.append(
         "\n> Captured on loopback with a full snaplen "
         "(`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the "

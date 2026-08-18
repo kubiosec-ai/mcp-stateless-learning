@@ -87,6 +87,53 @@ Officially, the four Tier 1 SDKs (TypeScript, Python, Go, C#) support
 2026-07-28, with Rust in beta. Go shipped as `1.7.0-pre.1` and C# behind
 `--prerelease` during the beta window.
 
+## Do the two frameworks actually differ in features?
+
+Yes, and it is worth separating the observation from the cause, because the
+obvious explanation is the wrong one.
+
+**Microsoft's framework supports MCP sampling. OpenAI's does not.**
+`agent_framework/_mcp.py` implements the whole path: a `sampling_callback`, a
+`SamplingApprovalCallback` gate, and a declared `types.SamplingCapability`
+sent at connect time. `openai-agents` has nothing equivalent anywhere under
+`agents/mcp/`.
+
+**But this is not caused by the protocol era.** Two measurements say so:
+
+- `openai-agents` declares **empty** client capabilities in *both* eras. The
+  legacy `initialize` sends `"capabilities": {}` and the modern
+  `server/discover` sends `"clientCapabilities": {}`. It never advertised
+  sampling, so upgrading did not take anything away.
+- The modern SDK has not dropped sampling either. `mcp 2.0.0` still ships
+  `SamplingCapability`, `SamplingMessage`, `SamplingToolsCapability` and
+  friends, consistent with the spec deprecating these for twelve months rather
+  than deleting them.
+
+So the difference is a **product decision by each SDK**, not a consequence of
+which protocol era it sits on. Microsoft chose to implement sampling; OpenAI
+did not. That Microsoft also happens to be on `mcp<2` is a separate fact.
+
+**How much that feature is worth is shrinking, though.** Sampling needs a
+server willing to initiate it, and the modern era removed the server-to-client
+back-channel that carried it. FastMCP 4 dropped `ctx.sample()` outright. So a
+Microsoft agent can offer sampling, but against a FastMCP 4 server there is
+nothing on the other end to ask. The capability is real; the set of servers
+that can use it is not growing.
+
+**One detail worth stealing regardless of framework.** Microsoft's default is
+to *deny* server-initiated sampling unless you supply an approval callback,
+and to bound approved requests. Their own comment explains why:
+
+> MCP servers are untrusted third parties, so the default `sampling_callback`
+> denies requests unless an approval callback is supplied, and bounds the cost
+> of any approved request.
+
+with `_DEFAULT_SAMPLING_MAX_TOKENS = 4096` and
+`_DEFAULT_SAMPLING_MAX_REQUESTS = 25` per connection. Sampling inverts the
+usual trust direction: a tool server gets to ask *your* model to generate
+text, on your budget. Deny-by-default with an explicit gate and a cost ceiling
+is the right posture.
+
 ## Verified: legacy clients still work
 
 The claim "v2 servers continue to accept legacy 2025-11-25 handshake
