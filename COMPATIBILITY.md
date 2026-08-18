@@ -44,6 +44,37 @@ install the modern SDK at all. Seventeen days later that is only half true:
 - **Microsoft Agent Framework has not.** `agent-framework-core` `1.14.0` still
   pins `mcp<2,>=1.24.0`, so it remains legacy-era.
 
+### What the OpenAI Agents SDK change actually means
+
+"It can install `mcp 2.x`" is not the same as "it speaks the stateless
+protocol", so this was measured on the wire against server `01`.
+
+The Agents SDK does not implement the MCP protocol itself. It delegates to the
+official `mcp` package, so **the protocol era is decided by whichever `mcp`
+version your resolver picked**, not by the `openai-agents` version:
+
+| openai-agents | resolved `mcp` | `mcp-protocol-version` sent | Handshake |
+|---|---|---|---|
+| 0.19.2 | 1.29.0 | `2025-11-25` | `initialize` + `notifications/initialized` |
+| 0.21.1 | 2.0.0 | `2026-07-28` | none, starts at `server/discover` |
+| 0.21.1 | 1.29.0 (forced) | `2025-11-25` | `initialize` + `notifications/initialized` |
+
+That third row is the one to remember. Upgrading `openai-agents` does not by
+itself move you to the stateless protocol; it only relaxes the pin so `mcp 2.x`
+*may* be installed. In an environment that already holds `mcp 1.x`, the newest
+Agents SDK still speaks the legacy era.
+
+So, is it stateless "built in"? Yes, in the sense that there is no flag to set:
+with `mcp 2.0.0` present the client sends `mcp-protocol-version: 2026-07-28`,
+skips the handshake entirely, and emits `mcp-method` / `mcp-name` routing
+headers, with zero `initialize` calls and no session id anywhere. Client code
+is unchanged.
+
+The flip side is worth planning for: the wire format changes underneath you on
+a dependency bump. If anything in front of your servers inspects MCP traffic,
+a routine `pip install -U` can change what it sees. Pin `mcp` deliberately
+rather than letting the resolver decide.
+
 Which is exactly why FastMCP 4's dual-era support is not a nicety. As long as
 one major framework sits on either side of the split, a server that speaks
 only one era is unusable by half the ecosystem.
