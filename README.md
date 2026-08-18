@@ -182,11 +182,12 @@ python 05_compat_check.py
 Reports which MCP SDK you have, which protocol era it belongs to, and whether
 it can reach each server.
 
-Short version: the 2026-07-28 spec made MCP stateless, but the OpenAI Agents
-SDK and Microsoft Agent Framework are both still pinned to the previous
-generation (`mcp<2`), and they talk to these servers fine anyway. See
-[COMPATIBILITY.md](COMPATIBILITY.md) for the measured version matrix and the
-verified cross-era test.
+Short version: the ecosystem is mid-migration and moving quickly. As of
+2026-08-18 the OpenAI Agents SDK has crossed to the modern SDK (`0.21.1`
+pins `mcp<3`), while Microsoft's `agent-framework-core` is still on `mcp<2`.
+Both talk to these servers fine, which is the point. See
+[COMPATIBILITY.md](COMPATIBILITY.md) for the measured matrix, and re-run the
+checker rather than trusting a table that ages this fast.
 
 ## The files
 

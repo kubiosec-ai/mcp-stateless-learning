@@ -24,8 +24,12 @@ To prove cross-era compatibility, run it a second time from an environment
 holding a legacy-era SDK:
 
     python -m venv /tmp/venv_legacy
-    /tmp/venv_legacy/bin/pip install openai-agents   # pins mcp<2
+    /tmp/venv_legacy/bin/pip install "openai-agents==0.19.2"   # holds mcp<2
     /tmp/venv_legacy/bin/python 05_compat_check.py
+
+Pin that version explicitly. openai-agents 0.21.1 and later relaxed the pin
+to `mcp<3`, so a plain install now gives you a second modern environment
+rather than a legacy one.
 
 Both runs should pass against the same running servers. That is the whole
 backward-compatibility story, demonstrated rather than asserted.

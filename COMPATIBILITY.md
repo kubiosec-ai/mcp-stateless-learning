@@ -1,6 +1,6 @@
 # SDK compatibility and backward compatibility
 
-Status: **August 2026**. MCP is mid-migration between two protocol eras, so
+Status: **verified 2026-08-18**. MCP is mid-migration between two protocol eras, so
 "which SDK works with which server" is a live question. Everything in the
 verified tables below was measured on this machine, not taken from a blog
 post; reproduce it with `05_compat_check.py`.
@@ -21,25 +21,36 @@ The 2026-07-28 release removed the handshake and the `Mcp-Session-Id` header
 
 ## Where the SDKs actually stand
 
-Versions read from PyPI/npm on 2026-08-01:
+Versions read live from PyPI and npm on **2026-08-18**:
 
 | SDK | Latest | MCP SDK pin | Era |
 |---|---|---|---|
 | `mcp` (official Python) | **2.0.0** | n/a | modern |
 | `@modelcontextprotocol/server` / `client` (TS) | **2.0.0** | n/a | modern |
 | `@modelcontextprotocol/sdk` (old TS package) | **1.30.0** | n/a | legacy |
-| `fastmcp` (stable) | **3.4.5** | n/a | legacy-era default |
+| `fastmcp` (stable) | **3.4.7** | n/a | legacy-era default |
 | `fastmcp` (beta, used here) | **4.0.0b1** | n/a | modern + legacy |
-| `openai-agents` | **0.19.2** | `mcp<2,>=1.19.0` | **legacy only** |
-| `agent-framework-core` (Microsoft) | **1.13.0** | `mcp<2,>=1.24.0` | **legacy only** |
+| `fastmcp` (newest beta) | **4.0.0b3** | n/a | modern + legacy |
+| `openai-agents` | **0.21.1** | `mcp<3,>=1.19.0` | **modern-capable** |
+| `agent-framework-core` (Microsoft) | **1.14.0** | `mcp<2,>=1.24.0` | **legacy only** |
 
-The two rows that matter most in practice: **the OpenAI Agents SDK and
-Microsoft Agent Framework are both still pinned to `mcp<2`.** They cannot
-install the modern SDK at all. If your server only spoke the 2026-07-28
-protocol, neither framework could talk to it today.
+**This is moving fast, so re-run `05_compat_check.py` rather than trusting
+this table.** On 2026-08-01 both frameworks pinned `mcp<2` and neither could
+install the modern SDK at all. Seventeen days later that is only half true:
 
-That is exactly why FastMCP 4's dual-era support isn't a nicety; it's what
-keeps your server usable by the current agent ecosystem.
+- **OpenAI Agents SDK crossed over.** `0.19.2` pinned `mcp<2`; `0.21.1` pins
+  `mcp<3`. A clean install now resolves to `mcp 2.0.0`, verified, so it speaks
+  the modern stateless protocol.
+- **Microsoft Agent Framework has not.** `agent-framework-core` `1.14.0` still
+  pins `mcp<2,>=1.24.0`, so it remains legacy-era.
+
+Which is exactly why FastMCP 4's dual-era support is not a nicety. As long as
+one major framework sits on either side of the split, a server that speaks
+only one era is unusable by half the ecosystem.
+
+FastMCP 4 is still beta: `4.0.0b2` and `4.0.0b3` have shipped since, and the
+stable line is `3.x`. This training pins `4.0.0b1` so the examples stay
+reproducible; the concepts do not change between betas, but the API can.
 
 Officially, the four Tier 1 SDKs (TypeScript, Python, Go, C#) support
 2026-07-28, with Rust in beta. Go shipped as `1.7.0-pre.1` and C# behind
@@ -52,9 +63,14 @@ requests" is testable, so it was tested. The same three servers were probed
 from two isolated environments:
 
 ```
-MODERN  mcp 2.0.0  + fastmcp 4.0.0b1        -> 3/3 servers OK
-LEGACY  mcp 1.29.0 + openai-agents 0.19.2   -> 3/3 servers OK
+MODERN  mcp 2.0.0  + fastmcp 4.0.0b1         -> 3/3 servers OK
+MODERN  mcp 2.0.0  + openai-agents 0.21.1    -> 3/3 servers OK
+LEGACY  mcp 1.29.0 + openai-agents 0.19.2    -> 3/3 servers OK
 ```
+
+The middle row is the interesting one: the *same* `openai-agents` package,
+two versions apart, once on each side of the protocol split, both reaching
+the same unchanged servers.
 
 Detail from the legacy-era run against FastMCP 4.0.0b1 servers:
 
@@ -81,9 +97,12 @@ Reproduce both runs:
 ```bash
 python 05_compat_check.py                        # modern env
 
+# Pin the version explicitly. A plain `pip install openai-agents` now
+# resolves to mcp 2.x, so it would give you a second modern env, not a
+# legacy one.
 python -m venv /tmp/venv_legacy
-/tmp/venv_legacy/bin/pip install openai-agents   # pins mcp<2
-/tmp/venv_legacy/bin/python 05_compat_check.py   # legacy env
+/tmp/venv_legacy/bin/pip install "openai-agents==0.19.2"   # holds mcp<2
+/tmp/venv_legacy/bin/python 05_compat_check.py             # legacy env
 ```
 
 ## How negotiation works in FastMCP 4
@@ -159,4 +178,4 @@ using sampling/roots as work to schedule inside the twelve-month window.
 - [Bringing MCP 2026-07-28 to Claude](https://claude.com/blog/bringing-mcp-2026-07-28-to-claude)
 - [OpenAI Agents SDK, MCP](https://openai.github.io/openai-agents-python/mcp/)
 - [Microsoft ships Agent Framework 1.0](https://visualstudiomagazine.com/articles/2026/04/06/microsoft-ships-production-ready-agent-framework-1-0-for-net-and-python.aspx)
-- Version data read live from PyPI and the npm registry, 2026-08-01.
+- Version data read live from PyPI and the npm registry, 2026-08-18.
