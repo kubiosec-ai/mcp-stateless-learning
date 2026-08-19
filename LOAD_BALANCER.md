@@ -303,7 +303,83 @@ affinity for those flows. Cookie insertion is the most practical mechanism,
 since legacy clients honour cookies but emit no routing headers. Better: set
 `stateless_http=True` and remove the requirement.
 
-## 7. Things that will surprise you
+## 7. The other option: an MCP gateway
+
+Everything above tries to make a load balancer smart enough to handle MCP.
+The alternative is to stop asking it to. A gateway is not a balancer with
+extra features: it is an MCP **server** to the client and an MCP **client** to
+the backends, so it acts on protocol semantics instead of guessing from
+headers.
+
+`07_gateway.py` is a working example. FastMCP ships the primitive
+(`ProxyProvider`), so federating three backends behind one endpoint is a
+handful of lines:
+
+```python
+gw = FastMCP("mcp-gateway", middleware=[GatewayPolicy(), SessionSerialiser()])
+for namespace, url in BACKENDS.items():
+    gw.add_provider(ProxyProvider(lambda u=url: Client(u), cache_ttl=300),
+                    namespace=namespace)
+```
+
+Running it in front of the three demo servers:
+
+```
+gateway exposes:
+  calc_add, calc_multiply, calc_celsius_to_fahrenheit,
+  notes_increment, notes_get_counter, notes_add_note, notes_list_notes,
+  sess_increment, sess_remember, sess_recall, sess_create_session, sess_end_session
+
+[audit] calc_add ok 160ms (call #1)
+  calc_add(2,3) -> 5.0
+[audit] sess_increment ok 90ms (call #3)
+  sess_increment x3 -> 3   (session state intact through the proxy)
+```
+
+### What it solves that a balancer cannot
+
+**Era normalisation.** Terminate whatever the client speaks at the front and
+speak one era to the backends. The mixed-era blind spot from section 4.5
+disappears, and your backends stop caring which `mcp` version a client's
+dependency resolver happened to pick.
+
+**The handle-to-node mapping.** This is the indirection layer that
+resource-shaped state needs (section 3), placed at the edge where you own it,
+instead of reimplemented inside every server.
+
+**Serialisation per session.** A lock keyed on `session_id` means the
+interleaving that loses writes cannot happen, for every backend at once, with
+no backend changes. See the honest status note in the code: the race was
+reproduced at the store level, but not through the gateway, so treat the
+middleware as designed rather than proven.
+
+**A policy choke point that understands JSON-RPC.** Tool allow-lists,
+per-tenant rate limits, argument validation, audit logging, and inspection of
+tool *responses*. This is the thing a WAF cannot do because it cannot parse
+the payload, and the reason a gateway is interesting for security review and
+not only for scaling.
+
+**Component-list caching.** `ProxyProvider` caches the backend's tool list
+(300s by default), which removes the per-connection `tools/list` refetch
+visible in `PROTOCOL_TRACE.md`.
+
+### What it costs
+
+You have concentrated state and trust into one component. It is now a single
+point of failure and a high-value target that sees every tool call and every
+argument, including anything sensitive passed to a tool. It adds a network
+hop. Cache TTL means a tool added to a backend stays invisible for up to five
+minutes. FastMCP marks proxied components `task_config.mode="forbidden"`, so
+background tasks cannot run through a proxy and need a separate path. And the
+in-process session lock only works for a single gateway instance; scale the
+gateway out and you need a distributed lock or gateway-level affinity, which
+is the same problem one layer up.
+
+That last point is worth sitting with. A gateway does not eliminate the
+affinity problem, it relocates it to a component you control and can reason
+about. That is usually the right trade, and it is a trade rather than a fix.
+
+## 8. Things that will surprise you
 
 **The era a client speaks follows its `mcp` library version, not its
 framework version.** `openai-agents 0.21.1` with `mcp 2.0.0` speaks
@@ -327,7 +403,7 @@ traffic, they simply do not match. The same blind spot applies to a WAF rule,
 a DLP policy, or a tracing pipeline keyed on `mcp-method`, which makes this a
 security concern and not only an operations one.
 
-## 8. Appendix: reproducing the measurements
+## 9. Appendix: reproducing the measurements
 
 ```bash
 # session id issued or not, per server config

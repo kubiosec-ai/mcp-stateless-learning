@@ -197,6 +197,7 @@ checker rather than trusting a table that ages this fast.
 - `04_client_demo.py`: client that exercises all three over HTTP
 - `05_compat_check.py`: SDK and protocol-era compatibility checker
 - `06_pcap_to_markdown.py`: turns a packet capture into `PROTOCOL_TRACE.md`
+- `07_gateway.py`: an MCP gateway federating the three servers, with policy middleware
 - `PROTOCOL_TRACE.md`: the protocol walkthrough, generated from `mcp_stateless.pcap`
 - `COMPATIBILITY.md`: SDK versions, backward compatibility, deprecation timeline
 - `LOAD_BALANCER.md`: running MCP behind a load balancer, persistence options assessed
