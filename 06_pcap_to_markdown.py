@@ -406,6 +406,106 @@ def build(pcap: str, out_path: str) -> None:
         "you are sizing or defending a legacy-era deployment.\n"
     )
 
+    doc.append("### Does this mean the load balancer needs a smarter algorithm?\n")
+    doc.append(
+        "It looks that way, but the opposite is true. The tempting conclusion "
+        "is to build an era-detecting balancer: sniff headers, spot legacy "
+        "flows, apply stickiness selectively, parse bodies when the headers are "
+        "missing. Do not build that. Measuring which combinations actually "
+        "produce a session id shows the variable you control is somewhere "
+        "else:\n"
+    )
+    doc.append(
+        "| Negotiated era | Server `stateless_http` | `Mcp-Session-Id` | Affinity needed |\n"
+        "|---|---|---|---|\n"
+        "| modern | `True` | no | no |\n"
+        "| modern | `False` | no | no |\n"
+        "| legacy | `True` | **no** | **no** |\n"
+        "| legacy | `False` | yes | yes |\n"
+    )
+    doc.append(
+        "Only one cell needs sticky sessions, and the thing that selects it is "
+        "**the server's own configuration, not the client**. A legacy client "
+        "against a server running `stateless_http=True` produced zero session "
+        "ids; the same client against a session-keeping server produced nine. "
+        "Meanwhile the modern client produced zero against every server in this "
+        "capture, whatever their setting, because the modern protocol has no "
+        "session concept to use.\n"
+    )
+    doc.append(
+        "So the fix is not a cleverer algorithm, it is a boring fleet: run "
+        "`stateless_http=True` everywhere and keep application state in a "
+        "shared store. Then every flow, legacy or modern, is round-robin safe, "
+        "and the balancer needs no MCP awareness at all. Complexity moves from "
+        "runtime traffic inspection, which is fragile and silently "
+        "era-dependent, to deployment configuration, which you can audit.\n"
+    )
+    doc.append(
+        "Reach for MCP-aware routing only when you want something extra: shard "
+        "locality via `Mcp-Param-*`, per-tenant rate limiting, or richer "
+        "telemetry. Those are optimisations layered on a fleet that is already "
+        "correct without them.\n"
+    )
+
+    doc.append("### The limit of that argument: state you cannot serialise\n")
+    doc.append(
+        "Everything above assumes the state is **data**, something you can put "
+        "in a key-value store. Drop that assumption and the simplicity goes "
+        "with it. Run two replicas of server `03` with the default in-memory "
+        "store, mint a handle on one, and send it to the other the way a "
+        "round-robin balancer would:\n"
+    )
+    doc.append(
+        "```\n"
+        "replica A: created session, increment -> 1\n"
+        "replica B: FAILED -> ToolError: Invalid or unknown session.\n"
+        "```\n"
+    )
+    doc.append(
+        "The explicit-handle pattern does not make you round-robin safe by "
+        "itself. It makes you round-robin safe *when the state behind the "
+        "handle is genuinely shared*. Here the handle was valid and the store "
+        "was process-local, so the second replica had never heard of it.\n"
+    )
+    doc.append(
+        "That is fixable with Redis. What is not fixable that way is state that "
+        "is a **live resource** rather than data: an interpreter or REPL kernel "
+        "with variables and imports in memory, a code-execution container, a "
+        "headless browser context, an SSH session, an open transaction. You "
+        "cannot serialise a running process into a key-value store, so requests "
+        "carrying that handle have to reach the machine actually holding it.\n"
+    )
+    doc.append(
+        "Affinity comes back for those, and you get two honest choices. Route "
+        "on the handle at the edge, promoting it with `x-mcp-header` so the "
+        "balancer can hash on `Mcp-Param-*`. Or keep the MCP servers stateless "
+        "and put the indirection behind them: any replica accepts the request, "
+        "looks up which node owns that container, and proxies. The first puts "
+        "the mapping in your infrastructure, the second in your application. "
+        "Neither is free, and no protocol version removes the constraint.\n"
+    )
+    doc.append(
+        "**The modern spec still helps here, just not by deleting the "
+        "problem.** Under legacy, affinity keyed on an `Mcp-Session-Id` the "
+        "transport minted and tied to a connection. Now you mint the handle "
+        "yourself: you choose what it identifies, how long it lives, when it "
+        "dies (`end_session` becomes \"destroy the container\"), and whether it "
+        "is exposed for routing. Explicit, application-owned affinity is easier "
+        "to reason about and to bound than implicit transport affinity, even "
+        "though it is still affinity. What you inherit in exchange is a "
+        "resource lifecycle to run: TTLs, eviction, orphan cleanup after a node "
+        "dies.\n"
+    )
+    doc.append(
+        "So the honest rule. If your state is data, statelessness really does "
+        "buy you a dumb balancer. If your state is a live resource, it buys you "
+        "an explicit handle to route on instead of a hidden one, and you still "
+        "owe the system somewhere that knows where things live. The trap in "
+        "both cases is the same: needing traffic inspection for *correctness*. "
+        "Route deliberately on a handle you designed, not by sniffing which "
+        "protocol era a flow happened to negotiate.\n"
+    )
+
     doc.append(
         "\n> Captured on loopback with a full snaplen "
         "(`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the "
