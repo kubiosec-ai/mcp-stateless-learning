@@ -97,6 +97,26 @@ Worse for classification: the legacy client's very first request, the `initializ
 
 Practical guidance for anything sitting in front of MCP servers: treat header-based routing as an optimisation with a body-parsing or default-route fallback, never as complete coverage. And expect the mix to shift under you. The era a client speaks follows its `mcp` library version, so a dependency bump on the client side changes what your infrastructure sees, with no server change at all.
 
+### What if the client is modern but the server is legacy?
+
+The client probes, fails, and falls back. Measured by pointing a modern `fastmcp 4.0.0b1` client at a legacy-era server (`fastmcp 3.4.7` on `mcp 1.29.0`):
+
+```
+-> server/discover              mcp-protocol-version: 2026-07-28   # modern probe
+<- HTTP 400  Bad Request: Missing session ID                       # probe refused
+-> initialize                   (no version header)                # fall back
+<- HTTP 200  + Mcp-Session-Id: 8cf4445861264f71801836a3ff86ee13
+-> notifications/initialized    2025-11-25  + Mcp-Session-Id
+-> tools/list                   2025-11-25  + Mcp-Session-Id
+-> tools/call                   2025-11-25  + Mcp-Session-Id
+```
+
+It costs one wasted round trip and then behaves exactly like a legacy client. Note what the client's own code looked like: unchanged. The same `Client(url)` produced sessionless traffic against a modern server and full sticky-session traffic here.
+
+**This is the part that matters for anything sitting in front of the servers.** You cannot infer wire behaviour from the client alone. A modern-capable client talking to a legacy server emits `Mcp-Session-Id` on every request after the handshake, so that conversation *does* need session affinity. Whether a given flow is sticky is a property of the negotiated pair, not of either end. If you run a mixed fleet, some of your traffic still needs the old treatment.
+
+Two smaller details worth noticing in that capture. The fallback `initialize` carries no `mcp-protocol-version` header at all, so the request that starts the legacy conversation is again the one an intermediary cannot classify from headers. And the refused probe still came back carrying a session id of its own (`0621348bbee1473784df24603addd315`), different from the one the conversation went on to use: a rejected, unauthenticated probe was enough to make the server allocate session state. Worth a thought if you are sizing or defending a legacy-era deployment.
+
 
 > Captured on loopback with a full snaplen (`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the larger `tools/list` responses.
 
