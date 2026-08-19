@@ -506,6 +506,58 @@ def build(pcap: str, out_path: str) -> None:
         "protocol era a flow happened to negotiate.\n"
     )
 
+    doc.append("### Scaling: the shared store fixes one bug and introduces another\n")
+    doc.append(
+        "Two replicas with the default in-memory store reject each other's "
+        "handles, so the fix is a shared store. That works, and it brings a new "
+        "problem that is much harder to notice. Same two replicas, now sharing "
+        "one store, with increments fired concurrently and alternated between "
+        "them the way a round-robin balancer would:\n"
+    )
+    doc.append(
+        "```\n"
+        "replica B accepts the handle -> 1            # shared store works\n"
+        "20 concurrent increments across 2 replicas -> counter 17  (LOST 3)\n"
+        "50 concurrent increments across 2 replicas -> counter 46  (LOST 4)\n"
+        "```\n"
+    )
+    doc.append(
+        "**Every one of those calls succeeded.** No exception, no error "
+        "response, no warning in a log. The counter is simply wrong. `get` then "
+        "`set` is a read-modify-write with a network round trip in the middle, "
+        "so two replicas read the same value and the second write erases the "
+        "first.\n"
+    )
+    doc.append(
+        "FastMCP is upfront about this in the `Session` docstring: *\"Concurrent "
+        "writes to one session race on the read-modify-write; session state is "
+        "small and typically driven serially by one agent, so this is "
+        "acceptable.\"* That is a reasonable assumption for one agent working "
+        "through a conversation. It is exactly the assumption that scale "
+        "removes: parallel tool calls, an agent fanning out subtasks, or two "
+        "user actions arriving together will all break it, and they break it "
+        "silently.\n"
+    )
+    doc.append(
+        "Three ways out, roughly in order of preference. Design session writes "
+        "to be **commutative or idempotent** so interleaving cannot lose "
+        "anything, which is a modelling change rather than an infrastructure "
+        "one. Use a store with **atomic primitives** and push the operation "
+        "into it, for example a Redis `INCR` or a compare-and-swap loop, rather "
+        "than reading into Python and writing back. Or **serialise per "
+        "session**, with a lock or by routing a session's requests to one "
+        "worker, which reintroduces exactly the affinity you removed.\n"
+    )
+    doc.append(
+        "The general shape is worth naming, because it is the part that "
+        "actually bites when you scale MCP servers. Statelessness moved the "
+        "state into a shared store, and the moment more than one replica writes "
+        "to the same key you have inherited a distributed systems problem "
+        "complete with lost updates, retention policy and a new failure domain. "
+        "The protocol made routing simple. It did not make concurrency simple, "
+        "and the default API shape (`get` then `set`) quietly invites the bug.\n"
+    )
+
     doc.append(
         "\n> Captured on loopback with a full snaplen "
         "(`tcpdump -i lo0 -s 0`). A truncated snaplen silently cuts off the "
