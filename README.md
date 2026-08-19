@@ -199,6 +199,16 @@ checker rather than trusting a table that ages this fast.
 - `06_pcap_to_markdown.py`: turns a packet capture into `PROTOCOL_TRACE.md`
 - `PROTOCOL_TRACE.md`: the protocol walkthrough, generated from `mcp_stateless.pcap`
 - `COMPATIBILITY.md`: SDK versions, backward compatibility, deprecation timeline
+- `LOAD_BALANCER.md`: running MCP behind a load balancer, persistence options assessed
+
+## Running it behind a load balancer
+
+`LOAD_BALANCER.md` covers what changes when you scale past one replica: which
+server settings decide whether you need session affinity at all, why L4 and
+source-IP stickiness do not work for MCP, what cookie insertion does and does
+not buy you, and how to route on a session handle without parsing JSON. It
+also documents the silent lost-update race that appears the moment two
+replicas share a session store.
 
 ## Why this matters (August 2026)
 
