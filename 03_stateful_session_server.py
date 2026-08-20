@@ -23,6 +23,11 @@ Compared with example 02:
   * backed by the server's `session_state_store` (in-memory here,
     but swap in Redis/etc. and every replica agrees).
 
+Handles should also be *legible*. `create_session()` hands back a bare
+uuid, which a model cannot choose between. `start_notebook(name)` shows the
+better shape: return the id together with a name and a summary, so the model
+picks by meaning and audit logs read properly.
+
 Key pieces (all real FastMCP 4.0.0b1 API):
   * `mcp.add_provider(SessionProvider())`  -> registers the
     `create_session()` and `end_session(session_id)` tools.
@@ -37,12 +42,53 @@ Run it:
 """
 
 from fastmcp import FastMCP
-from fastmcp.server.sessions import SessionId, SessionProvider, get_session
+from fastmcp.server.sessions import (
+    SessionId,
+    SessionProvider,
+    create_session,
+    get_session,
+)
 
 mcp = FastMCP("per-session-notebook")
 
 # Register the create_session() / end_session() lifecycle tools.
 mcp.add_provider(SessionProvider())
+
+
+@mcp.tool
+async def start_notebook(name: str) -> dict:
+    """Create a session and return a handle the MODEL can actually use.
+
+    `create_session()` (registered by SessionProvider) returns a bare uuid
+    like "32fd291f-e091-4210-a8af-8b029fb6b1e8". That is fine for a machine
+    and useless for a model: with three of them in context, nothing in the
+    string says which notebook is which, so the model has to guess.
+
+    A handle should carry enough context to be chosen sensibly. Returning
+    the id together with a name and a summary means the model can say "the
+    shopping one" instead of pattern-matching hex. It also makes audit logs
+    readable, because the tool call records which notebook was touched.
+
+    This is the same idea as the id itself: make the state explicit and
+    legible rather than hidden.
+    """
+    session_id = await create_session()
+    session = await get_session(session_id)
+    await session.set("name", name)
+    return {"session_id": session_id, "name": name, "facts": 0}
+
+
+@mcp.tool
+async def describe(session_id: SessionId) -> dict:
+    """Return a readable summary of a session, not just its raw state."""
+    session = await get_session(session_id)
+    facts = await session.get("facts", default=[])
+    return {
+        "session_id": session_id,
+        "name": await session.get("name", default="(unnamed)"),
+        "facts": len(facts),
+        "count": await session.get("count", default=0),
+    }
 
 
 @mcp.tool

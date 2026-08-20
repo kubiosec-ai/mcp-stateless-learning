@@ -14,6 +14,8 @@ Generated from `mcp_stateless.pcap` by `06_pcap_to_markdown.py`. This is the tra
 
 **5. State is a plain argument.** In the `03` section, `session_id` travels inside `arguments` like any other parameter. That is the whole explicit-handle pattern, visible in the bytes. Watch one session count 1, 2, 3 while a second session independently starts at 1.
 
+**6. Results carry caching hints.** Every result below includes `cacheScope` and `ttlMs`, here `"private"` and `0`. With sessions gone there is no connection for a server to remember you on, so it instead tells intermediaries what may be reused and for how long. `ttlMs: 0` means do not cache, and `private` means any cache must not be shared between callers. Set them on a stable `tools/list` and a gateway can serve it without touching your server at all. It is the same trade as `_meta`: the protocol says more per request precisely because it remembers nothing between them.
+
 ## Two questions this trace always raises
 
 **Why are there three near-identical `add` calls in section `01`?** Compare any two of them: they differ only in `id` and `progressToken`. Everything else, including `Content-Length`, is identical, and both return `5.0`. Those two fields are correlation handles, not state: `id` is how JSON-RPC matches a response to its request, and `progressToken` is the label a server would attach progress notifications to. Repeating the call is the point. Same input, same output, nothing accumulating on the server. Compare with section `02`, where three identical `increment` calls return 1, 2 and 3.
@@ -1467,14 +1469,14 @@ content-type: application/json
     },
     "content": [
       {
-        "text": "32fd291f-e091-4210-a8af-8b029fb6b1e8",
+        "text": "eeb65945-8e2f-4cad-83e5-02406c8ee001",
         "type": "text"
       }
     ],
     "isError": false,
     "resultType": "complete",
     "structuredContent": {
-      "result": "32fd291f-e091-4210-a8af-8b029fb6b1e8"
+      "result": "eeb65945-8e2f-4cad-83e5-02406c8ee001"
     }
   }
 }
@@ -1516,7 +1518,7 @@ Content-Length: 283
 
 ```http
 HTTP/1.1 200
-content-length: 3313
+content-length: 4786
 content-type: application/json
 
 {
@@ -1526,6 +1528,57 @@ content-type: application/json
     "cacheScope": "private",
     "resultType": "complete",
     "tools": [
+      {
+        "_meta": {
+          "fastmcp": {
+            "tags": []
+          }
+        },
+        "description": "Create a session and return a handle the MODEL can actually use.\n\n`create_session()` (registered by SessionProvider) returns a bare uuid\nlike \"32fd291f-e091-4210-a8af-8b029fb6b1e8\". That is fine for a machine\nand useless for a model: with three of them in context, nothing in the\nstring says which notebook is which, so the model has to guess.\n\nA handle should carry enough context to be chosen sensibly. Returning\nthe id together with a name and a summary means the model can say \"the\nshopping one\" instead of pattern-matching hex. It also makes audit logs\nreadable, because the tool call records which notebook was touched.\n\nThis is the same idea as the id itself: make the state explicit and\nlegible rather than hidden.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        "name": "start_notebook",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      {
+        "_meta": {
+          "fastmcp": {
+            "tags": []
+          }
+        },
+        "description": "Return a readable summary of a session, not just its raw state.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "session_id": {
+              "type": "string",
+              "description": "Session identifier. Use a tool to create a session, then pass the resulting id here to persist state across calls in the same session."
+            }
+          },
+          "required": [
+            "session_id"
+          ]
+        },
+        "name": "describe",
+        "outputSchema": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
       {
         "_meta": {
           "fastmcp": {
@@ -1765,14 +1818,14 @@ content-type: application/json
     },
     "content": [
       {
-        "text": "f418df72-2c37-4acb-b06b-d237f6ce10a6",
+        "text": "c61baf13-8a43-4fe0-b488-09164d606117",
         "type": "text"
       }
     ],
     "isError": false,
     "resultType": "complete",
     "structuredContent": {
-      "result": "f418df72-2c37-4acb-b06b-d237f6ce10a6"
+      "result": "c61baf13-8a43-4fe0-b488-09164d606117"
     }
   }
 }
@@ -1800,7 +1853,7 @@ Content-Length: 386
   "params": {
     "name": "increment",
     "arguments": {
-      "session_id": "32fd291f-e091-4210-a8af-8b029fb6b1e8"
+      "session_id": "eeb65945-8e2f-4cad-83e5-02406c8ee001"
     },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -1873,7 +1926,7 @@ Content-Length: 386
   "params": {
     "name": "increment",
     "arguments": {
-      "session_id": "32fd291f-e091-4210-a8af-8b029fb6b1e8"
+      "session_id": "eeb65945-8e2f-4cad-83e5-02406c8ee001"
     },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -1946,7 +1999,7 @@ Content-Length: 386
   "params": {
     "name": "increment",
     "arguments": {
-      "session_id": "32fd291f-e091-4210-a8af-8b029fb6b1e8"
+      "session_id": "eeb65945-8e2f-4cad-83e5-02406c8ee001"
     },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -2019,7 +2072,7 @@ Content-Length: 386
   "params": {
     "name": "increment",
     "arguments": {
-      "session_id": "f418df72-2c37-4acb-b06b-d237f6ce10a6"
+      "session_id": "c61baf13-8a43-4fe0-b488-09164d606117"
     },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -2092,7 +2145,7 @@ Content-Length: 386
   "params": {
     "name": "increment",
     "arguments": {
-      "session_id": "32fd291f-e091-4210-a8af-8b029fb6b1e8"
+      "session_id": "eeb65945-8e2f-4cad-83e5-02406c8ee001"
     },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",

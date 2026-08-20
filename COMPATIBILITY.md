@@ -256,4 +256,6 @@ using sampling/roots as work to schedule inside the twelve-month window.
 - [Bringing MCP 2026-07-28 to Claude](https://claude.com/blog/bringing-mcp-2026-07-28-to-claude)
 - [OpenAI Agents SDK, MCP](https://openai.github.io/openai-agents-python/mcp/)
 - [Microsoft ships Agent Framework 1.0](https://visualstudiomagazine.com/articles/2026/04/06/microsoft-ships-production-ready-agent-framework-1-0-for-net-and-python.aspx)
+- [MCP sessions are gone: where should your state live?](https://aaif.io/blog/mcp-sessions-are-gone-where-should-your-state-live)
+  (source of the legible-handle idea and the `ttlMs` / `cacheScope` explanation)
 - Version data read live from PyPI and the npm registry, 2026-08-18.

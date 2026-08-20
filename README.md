@@ -49,12 +49,18 @@ would have its own separate copy). Kill and restart it mid-demo to show this.
 
 ### `03_stateful_session_server.py`: per-session memory, done properly
 
-Port **8003**. Tools: `increment`, `remember`, `recall`, plus `create_session`
-and `end_session`.
+Port **8003**. Tools: `start_notebook`, `describe`, `increment`, `remember`,
+`recall`, plus `create_session` and `end_session`.
 
 This fixes both of `02`'s problems while keeping the transport stateless. Each
 client gets its own isolated memory, and the state lives in a store you can
 point at Redis instead of one process's RAM.
+
+It also shows that a handle should be *legible*. `create_session()` returns a
+bare uuid, which a model cannot choose between when three are in context.
+`start_notebook("Birthday gifts")` returns
+`{session_id, name, facts}` instead, so the model picks by meaning and the
+audit log records which notebook was touched.
 
 **Teaches:** the pattern the modern MCP spec actually wants. See below.
 
@@ -141,9 +147,10 @@ To check a server without the UI at all:
 npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8001/mcp --method tools/list
 ```
 
-Worth demoing on **8003**: call `create_session`, paste the returned id into
-`increment`, and watch it climb 1, 2, 3. Mint a second session and it starts
-back at 1.
+Worth demoing on **8003**: call `start_notebook` with a name, paste the
+returned `session_id` into `increment`, and watch it climb 1, 2, 3. Then call
+`describe` to see the readable summary, and start a second notebook to watch
+it begin at 1.
 
 ## Seeing the protocol on the wire
 

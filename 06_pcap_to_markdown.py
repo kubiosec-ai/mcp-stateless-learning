@@ -187,6 +187,17 @@ def build(pcap: str, out_path: str) -> None:
         "explicit-handle pattern, visible in the bytes. Watch one session count "
         "1, 2, 3 while a second session independently starts at 1.\n"
     )
+    doc.append(
+        "**6. Results carry caching hints.** Every result below includes "
+        "`cacheScope` and `ttlMs`, here `\"private\"` and `0`. With sessions "
+        "gone there is no connection for a server to remember you on, so it "
+        "instead tells intermediaries what may be reused and for how long. "
+        "`ttlMs: 0` means do not cache, and `private` means any cache must not "
+        "be shared between callers. Set them on a stable `tools/list` and a "
+        "gateway can serve it without touching your server at all. It is the "
+        "same trade as `_meta`: the protocol says more per request precisely "
+        "because it remembers nothing between them.\n"
+    )
 
     doc.append("## Two questions this trace always raises\n")
     doc.append(
